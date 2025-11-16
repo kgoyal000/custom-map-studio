@@ -1,0 +1,664 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Professional Map Style Editor</title>
+
+    <!-- Mapbox GL JS -->
+    <link href="https://api.mapbox.com/mapbox-gl-js/v2.15.0/mapbox-gl.css" rel="stylesheet">
+    <script src="https://api.mapbox.com/mapbox-gl-js/v2.15.0/mapbox-gl.js"></script>
+
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+
+    <!-- Vue 3 -->
+    <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
+
+    <style>
+        [v-cloak] { display: none; }
+
+        .map-canvas {
+            width: 100%;
+            height: 100%;
+        }
+
+        /* Custom scrollbar */
+        ::-webkit-scrollbar {
+            width: 8px;
+            height: 8px;
+        }
+
+        ::-webkit-scrollbar-track {
+            background: #f1f5f9;
+        }
+
+        ::-webkit-scrollbar-thumb {
+            background: #cbd5e1;
+            border-radius: 4px;
+        }
+
+        ::-webkit-scrollbar-thumb:hover {
+            background: #94a3b8;
+        }
+
+        /* Toggle switch */
+        .toggle-checkbox:checked {
+            right: 0;
+            border-color: #10b981;
+        }
+
+        .toggle-checkbox:checked + .toggle-label {
+            background-color: #10b981;
+        }
+    </style>
+</head>
+<body class="bg-slate-50">
+    <div id="app" v-cloak class="h-screen flex flex-col">
+        <!-- Header -->
+        <header class="bg-white border-b border-slate-200 px-6 py-4">
+            <div class="flex items-center justify-between">
+                <div class="flex items-center gap-4">
+                    <div class="flex items-center gap-3">
+                        <div class="w-10 h-10 bg-gradient-to-br from-blue-600 to-indigo-600 rounded-lg flex items-center justify-center">
+                            <svg class="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L15 4m0 13V4m0 0L9 7"/>
+                            </svg>
+                        </div>
+                        <div>
+                            <h1 class="text-xl font-bold text-slate-900">Map Style Editor</h1>
+                            <p class="text-sm text-slate-500">Professional Edition</p>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="flex items-center gap-3">
+                    <input
+                        v-model="styleName"
+                        type="text"
+                        placeholder="Enter style name..."
+                        class="px-4 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    >
+                    <button
+                        @click="resetStyle"
+                        class="px-4 py-2 border border-slate-300 text-slate-700 rounded-lg hover:bg-slate-50 flex items-center gap-2 transition-colors"
+                    >
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
+                        </svg>
+                        Reset
+                    </button>
+                    <button
+                        @click="exportStyle"
+                        class="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 flex items-center gap-2 transition-colors"
+                    >
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/>
+                        </svg>
+                        Export Style
+                    </button>
+                </div>
+            </div>
+        </header>
+
+        <!-- Main Content -->
+        <div class="flex-1 flex overflow-hidden">
+            <!-- Left Sidebar -->
+            <aside class="w-96 bg-white border-r border-slate-200 flex flex-col overflow-y-auto">
+                <!-- Location Search -->
+                <div class="p-6 border-b border-slate-200">
+                    <h3 class="text-sm font-semibold text-slate-900 mb-3">Location Search</h3>
+                    <div class="flex gap-2">
+                        <input
+                            v-model="searchQuery"
+                            @keyup.enter="searchLocation"
+                            type="text"
+                            placeholder="Search for a location..."
+                            class="flex-1 px-3 py-2 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                        >
+                        <button
+                            @click="searchLocation"
+                            class="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+                        >
+                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/>
+                            </svg>
+                        </button>
+                    </div>
+
+                    <!-- Search Results -->
+                    <div v-if="searchResults.length > 0" class="mt-3 space-y-2 max-h-48 overflow-y-auto">
+                        <div
+                            v-for="result in searchResults"
+                            :key="result.id"
+                            @click="flyToLocation(result)"
+                            class="p-3 bg-slate-50 rounded-lg cursor-pointer hover:bg-slate-100 transition-colors"
+                        >
+                            <p class="text-sm font-medium text-slate-900">{{ result.text }}</p>
+                            <p class="text-xs text-slate-500 mt-1">{{ result.place_name }}</p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Quick Color Presets -->
+                <div class="p-6 border-b border-slate-200">
+                    <h3 class="text-sm font-semibold text-slate-900 mb-3">Quick Color Presets</h3>
+                    <div class="grid grid-cols-2 gap-3">
+                        <div v-for="preset in colorPresets" :key="preset.id">
+                            <label class="text-xs font-medium text-slate-600 block mb-2">{{ preset.label }}</label>
+                            <div class="flex items-center gap-2">
+                                <input
+                                    :value="preset.color"
+                                    @input="updateQuickColor(preset.id, $event.target.value)"
+                                    type="color"
+                                    class="w-12 h-12 rounded-lg cursor-pointer border-2 border-slate-200 hover:border-blue-500 transition-colors"
+                                >
+                                <input
+                                    :value="preset.color"
+                                    type="text"
+                                    readonly
+                                    class="flex-1 px-2 py-1 text-xs bg-slate-50 border border-slate-200 rounded text-slate-600"
+                                >
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Layer Management -->
+                <div class="p-6 flex-1 flex flex-col">
+                    <div class="flex items-center justify-between mb-3">
+                        <h3 class="text-sm font-semibold text-slate-900">Layers</h3>
+                        <span class="text-xs text-slate-500">{{ filteredLayers.length }} layers</span>
+                    </div>
+
+                    <!-- Filter Tabs -->
+                    <div class="flex gap-2 mb-4">
+                        <button
+                            v-for="filter in layerFilters"
+                            :key="filter.value"
+                            @click="currentFilter = filter.value"
+                            :class="[
+                                'flex-1 px-3 py-2 text-xs font-medium rounded-lg transition-colors',
+                                currentFilter === filter.value
+                                    ? 'bg-blue-600 text-white'
+                                    : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                            ]"
+                        >
+                            {{ filter.label }}
+                        </button>
+                    </div>
+
+                    <!-- Search Layers -->
+                    <input
+                        v-model="layerSearchQuery"
+                        type="text"
+                        placeholder="Search layers..."
+                        class="w-full px-3 py-2 mb-3 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    >
+
+                    <!-- Layers List -->
+                    <div class="flex-1 overflow-y-auto space-y-2">
+                        <div
+                            v-for="(layer, index) in filteredLayers"
+                            :key="layer.id"
+                            @click="selectLayer(layer, index)"
+                            :class="[
+                                'p-3 rounded-lg border-2 cursor-pointer transition-all',
+                                selectedLayerIndex === index
+                                    ? 'border-blue-500 bg-blue-50'
+                                    : 'border-slate-200 bg-white hover:border-slate-300'
+                            ]"
+                        >
+                            <div class="flex items-center justify-between mb-2">
+                                <span class="text-sm font-medium text-slate-900">{{ getLayerDisplayName(layer.id) }}</span>
+                                <div
+                                    @click.stop="toggleLayerVisibility(layer, index)"
+                                    :class="[
+                                        'relative w-11 h-6 rounded-full transition-colors cursor-pointer',
+                                        isLayerVisible(layer) ? 'bg-green-500' : 'bg-slate-300'
+                                    ]"
+                                >
+                                    <div
+                                        :class="[
+                                            'absolute top-0.5 left-0.5 w-5 h-5 bg-white rounded-full transition-transform',
+                                            isLayerVisible(layer) ? 'transform translate-x-5' : ''
+                                        ]"
+                                    ></div>
+                                </div>
+                            </div>
+
+                            <div class="flex items-center gap-2 text-xs text-slate-500">
+                                <span class="px-2 py-1 bg-slate-100 rounded">{{ layer.type }}</span>
+                                <span v-if="layer.minzoom">min: {{ layer.minzoom }}</span>
+                                <span v-if="layer.maxzoom">max: {{ layer.maxzoom }}</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </aside>
+
+            <!-- Center - Map Preview -->
+            <main class="flex-1 flex flex-col bg-slate-100">
+                <div class="bg-white border-b border-slate-200 px-6 py-3 flex items-center justify-between">
+                    <div class="flex items-center gap-3">
+                        <h2 class="text-sm font-semibold text-slate-900">Live Preview</h2>
+                        <div class="flex items-center gap-2">
+                            <div class="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
+                            <span class="text-xs text-slate-500">Live</span>
+                        </div>
+                    </div>
+                    <div class="flex items-center gap-6 text-xs text-slate-600">
+                        <div class="flex items-center gap-2">
+                            <span class="font-medium">Zoom:</span>
+                            <span class="font-mono">{{ mapZoom.toFixed(2) }}</span>
+                        </div>
+                        <div class="flex items-center gap-2">
+                            <span class="font-medium">Center:</span>
+                            <span class="font-mono">{{ mapCenter.lat.toFixed(4) }}, {{ mapCenter.lng.toFixed(4) }}</span>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="flex-1 relative">
+                    <div id="map" class="map-canvas"></div>
+
+                    <!-- Map Controls -->
+                    <div class="absolute top-4 right-4 flex flex-col gap-2">
+                        <button
+                            @click="zoomIn"
+                            class="w-10 h-10 bg-white rounded-lg shadow-lg flex items-center justify-center hover:bg-slate-50 transition-colors text-slate-700 font-bold text-lg border border-slate-200"
+                        >+</button>
+                        <button
+                            @click="zoomOut"
+                            class="w-10 h-10 bg-white rounded-lg shadow-lg flex items-center justify-center hover:bg-slate-50 transition-colors text-slate-700 font-bold text-lg border border-slate-200"
+                        >−</button>
+                        <button
+                            @click="resetView"
+                            class="w-10 h-10 bg-white rounded-lg shadow-lg flex items-center justify-center hover:bg-slate-50 transition-colors border border-slate-200"
+                        >
+                            <svg class="w-5 h-5 text-slate-700" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6"/>
+                            </svg>
+                        </button>
+                    </div>
+                </div>
+            </main>
+
+            <!-- Right Sidebar -->
+            <aside class="w-96 bg-white border-l border-slate-200 flex flex-col overflow-y-auto">
+                <!-- Layer Properties -->
+                <div class="p-6 border-b border-slate-200">
+                    <h3 class="text-sm font-semibold text-slate-900 mb-4">Layer Properties</h3>
+
+                    <div v-if="selectedLayer">
+                        <!-- Layer Info -->
+                        <div class="mb-4 p-3 bg-slate-50 rounded-lg">
+                            <p class="text-xs font-medium text-slate-600 mb-1">Layer ID</p>
+                            <p class="text-sm text-slate-900 font-mono">{{ selectedLayer.id }}</p>
+                        </div>
+
+                        <div class="grid grid-cols-2 gap-3 mb-4">
+                            <div class="p-3 bg-slate-50 rounded-lg">
+                                <p class="text-xs font-medium text-slate-600 mb-1">Type</p>
+                                <p class="text-sm text-slate-900">{{ selectedLayer.type }}</p>
+                            </div>
+                            <div class="p-3 bg-slate-50 rounded-lg">
+                                <p class="text-xs font-medium text-slate-600 mb-1">Source</p>
+                                <p class="text-sm text-slate-900">{{ selectedLayer.source || 'N/A' }}</p>
+                            </div>
+                        </div>
+
+                        <div v-if="selectedLayer['source-layer']" class="mb-4 p-3 bg-slate-50 rounded-lg">
+                            <p class="text-xs font-medium text-slate-600 mb-1">Source Layer</p>
+                            <p class="text-sm text-slate-900">{{ selectedLayer['source-layer'] }}</p>
+                        </div>
+
+                        <!-- Paint Properties -->
+                        <div v-if="selectedLayer.paint && Object.keys(selectedLayer.paint).length > 0" class="mb-4">
+                            <h4 class="text-xs font-semibold text-slate-700 mb-3">Paint Properties</h4>
+                            <div class="space-y-3">
+                                <div v-for="(value, key) in selectedLayer.paint" :key="key">
+                                    <!-- Match Expression (for colors based on feature class) -->
+                                    <div v-if="isMatchExpression(value)">
+                                        <label class="text-xs font-semibold text-slate-900 block mb-1">{{ formatPropertyName(key) }}</label>
+                                        <p v-if="getPropertyDescription(key)" class="text-xs text-slate-500 mb-2">{{ getPropertyDescription(key) }}</p>
+                                        <p class="text-xs text-slate-400 mb-2 italic">Conditional values based on feature "{{ parseMatchCases(value).property }}" property</p>
+
+                                        <div class="space-y-2">
+                                            <div v-for="(matchCase, caseIndex) in parseMatchCases(value).cases" :key="caseIndex" class="p-3 bg-slate-50 rounded-lg border border-slate-200">
+                                                <div class="text-xs text-slate-600 mb-2">
+                                                    <span class="font-medium">When:</span> {{ matchCase.values.join(', ') }}
+                                                </div>
+                                                <div class="flex gap-2">
+                                                    <input
+                                                        v-if="typeof matchCase.result === 'string' && (matchCase.result.startsWith('rgba') || matchCase.result.startsWith('#'))"
+                                                        :value="rgbaToHex(matchCase.result)"
+                                                        @input="updateMatchCase(key, caseIndex, 'result', hexToRgba($event.target.value))"
+                                                        type="color"
+                                                        class="w-12 h-10 rounded cursor-pointer border-2 border-slate-200"
+                                                    >
+                                                    <input
+                                                        :value="matchCase.result"
+                                                        @input="updateMatchCase(key, caseIndex, 'result', $event.target.value)"
+                                                        type="text"
+                                                        class="flex-1 px-3 py-2 text-sm border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                                        placeholder="Result value"
+                                                    >
+                                                </div>
+                                            </div>
+
+                                            <!-- Default case -->
+                                            <div class="p-3 bg-blue-50 rounded-lg border border-blue-200">
+                                                <div class="text-xs text-blue-700 font-medium mb-2">Default (all other values):</div>
+                                                <div class="flex gap-2">
+                                                    <input
+                                                        v-if="typeof parseMatchCases(value).default === 'string' && (parseMatchCases(value).default.startsWith('rgba') || parseMatchCases(value).default.startsWith('#'))"
+                                                        :value="rgbaToHex(parseMatchCases(value).default)"
+                                                        @input="updateMatchDefault(key, hexToRgba($event.target.value))"
+                                                        type="color"
+                                                        class="w-12 h-10 rounded cursor-pointer border-2 border-slate-200"
+                                                    >
+                                                    <input
+                                                        :value="parseMatchCases(value).default"
+                                                        @input="updateMatchDefault(key, $event.target.value)"
+                                                        type="text"
+                                                        class="flex-1 px-3 py-2 text-sm border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                                        placeholder="Default value"
+                                                    >
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <!-- Interpolate Expression (for zoom-based values) -->
+                                    <div v-else-if="isInterpolateExpression(value)">
+                                        <label class="text-xs font-semibold text-slate-900 block mb-1">{{ formatPropertyName(key) }}</label>
+                                        <p v-if="getPropertyDescription(key)" class="text-xs text-slate-500 mb-2">{{ getPropertyDescription(key) }}</p>
+                                        <p class="text-xs text-slate-400 mb-2 italic">
+                                            {{ parseInterpolateStops(value).type === 'linear' ? 'Linear' : 'Exponential' }} interpolation
+                                            {{ parseInterpolateStops(value).type === 'exponential' ? `(base: ${parseInterpolateStops(value).base})` : '' }}
+                                        </p>
+
+                                        <div class="space-y-2">
+                                            <div v-for="(stop, stopIndex) in parseInterpolateStops(value).stops" :key="stopIndex" class="flex gap-2">
+                                                <input
+                                                    :value="stop[0]"
+                                                    @input="updateInterpolateStop(key, stopIndex, 0, parseFloat($event.target.value))"
+                                                    type="number"
+                                                    step="0.1"
+                                                    class="w-20 px-2 py-2 text-sm border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                                    placeholder="Zoom"
+                                                >
+                                                <input
+                                                    v-if="typeof stop[1] === 'number'"
+                                                    :value="stop[1]"
+                                                    @input="updateInterpolateStop(key, stopIndex, 1, parseFloat($event.target.value))"
+                                                    type="number"
+                                                    step="0.1"
+                                                    class="flex-1 px-3 py-2 text-sm border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                                    placeholder="Value"
+                                                >
+                                                <input
+                                                    v-else
+                                                    :value="stop[1]"
+                                                    @input="updateInterpolateStop(key, stopIndex, 1, $event.target.value)"
+                                                    type="text"
+                                                    class="flex-1 px-3 py-2 text-sm border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                                    placeholder="Value"
+                                                >
+                                                <button
+                                                    v-if="parseInterpolateStops(value).stops.length > 1"
+                                                    @click="removeInterpolateStop(key, stopIndex)"
+                                                    class="px-3 py-2 bg-red-500 text-white rounded-lg hover:bg-red-600 text-xs"
+                                                >
+                                                    ×
+                                                </button>
+                                            </div>
+                                            <button
+                                                @click="addInterpolateStop(key)"
+                                                class="w-full px-3 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 text-xs"
+                                            >
+                                                + Add Stop
+                                            </button>
+                                        </div>
+                                    </div>
+
+                                    <!-- Color Properties -->
+                                    <div v-else-if="isColorProperty(key)">
+                                        <label class="text-xs font-semibold text-slate-900 block mb-1">{{ formatPropertyName(key) }}</label>
+                                        <p v-if="getPropertyDescription(key)" class="text-xs text-slate-500 mb-2">{{ getPropertyDescription(key) }}</p>
+                                        <div v-if="isSimpleColor(value)" class="flex gap-2">
+                                            <input
+                                                :value="rgbaToHex(value)"
+                                                @input="updateLayerProperty('paint', key, hexToRgba($event.target.value))"
+                                                type="color"
+                                                class="w-12 h-10 rounded cursor-pointer border-2 border-slate-200"
+                                            >
+                                            <input
+                                                :value="value"
+                                                @input="updateLayerProperty('paint', key, $event.target.value)"
+                                                type="text"
+                                                class="flex-1 px-3 py-2 text-sm border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                            >
+                                        </div>
+                                        <div v-else class="p-2 bg-slate-100 rounded text-xs font-mono text-slate-600 overflow-x-auto">
+                                            {{ JSON.stringify(value, null, 2) }}
+                                        </div>
+                                    </div>
+
+                                    <!-- Opacity Properties -->
+                                    <div v-else-if="isOpacityProperty(key)">
+                                        <label class="text-xs font-semibold text-slate-900 block mb-1">{{ formatPropertyName(key) }}: {{ getOpacityValue(value) }}%</label>
+                                        <p v-if="getPropertyDescription(key)" class="text-xs text-slate-500 mb-2">{{ getPropertyDescription(key) }}</p>
+                                        <input
+                                            v-if="typeof value === 'number'"
+                                            :value="value"
+                                            @input="updateLayerProperty('paint', key, parseFloat($event.target.value))"
+                                            type="range"
+                                            min="0"
+                                            max="1"
+                                            step="0.05"
+                                            class="w-full"
+                                        >
+                                        <div v-else class="p-2 bg-slate-100 rounded text-xs font-mono text-slate-600 overflow-x-auto">
+                                            {{ JSON.stringify(value, null, 2) }}
+                                        </div>
+                                    </div>
+
+                                    <!-- Dasharray Properties -->
+                                    <div v-else-if="isDasharrayProperty(key)">
+                                        <label class="text-xs font-semibold text-slate-900 block mb-1">{{ formatPropertyName(key) }}</label>
+                                        <p v-if="getPropertyDescription(key)" class="text-xs text-slate-500 mb-2">{{ getPropertyDescription(key) }}</p>
+                                        <div v-if="Array.isArray(value)" class="space-y-2">
+                                            <div v-for="(dashValue, dashIndex) in value" :key="dashIndex" class="flex gap-2">
+                                                <input
+                                                    :value="dashValue"
+                                                    @input="updateDasharrayValue(key, dashIndex, parseFloat($event.target.value))"
+                                                    type="number"
+                                                    step="0.1"
+                                                    min="0"
+                                                    class="flex-1 px-3 py-2 text-sm border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                                    :placeholder="`${dashIndex % 2 === 0 ? 'Dash' : 'Gap'}`"
+                                                >
+                                                <button
+                                                    v-if="value.length > 2"
+                                                    @click="removeDasharrayValue(key, dashIndex)"
+                                                    class="px-3 py-2 bg-red-500 text-white rounded-lg hover:bg-red-600 text-xs"
+                                                >
+                                                    ×
+                                                </button>
+                                            </div>
+                                            <button
+                                                @click="addDasharrayValue(key)"
+                                                class="w-full px-3 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 text-xs"
+                                            >
+                                                + Add Value
+                                            </button>
+                                        </div>
+                                        <div v-else class="p-2 bg-slate-100 rounded text-xs font-mono text-slate-600 overflow-x-auto">
+                                            {{ JSON.stringify(value, null, 2) }}
+                                        </div>
+                                    </div>
+
+                                    <!-- Stops-based Properties (Width, Gap Width, etc.) -->
+                                    <div v-else-if="isStopsProperty(value)">
+                                        <label class="text-xs font-semibold text-slate-900 block mb-1">{{ formatPropertyName(key) }}</label>
+                                        <p v-if="getPropertyDescription(key)" class="text-xs text-slate-500 mb-2">{{ getPropertyDescription(key) }}</p>
+                                        <p class="text-xs text-slate-400 mb-2 italic">Zoom-based stops: [Zoom Level, Value]</p>
+                                        <div class="space-y-2">
+                                            <div v-for="(stop, stopIndex) in value.stops" :key="stopIndex" class="flex gap-2">
+                                                <input
+                                                    :value="stop[0]"
+                                                    @input="updateStopValue(key, stopIndex, 0, parseFloat($event.target.value))"
+                                                    type="number"
+                                                    step="0.1"
+                                                    class="w-20 px-2 py-2 text-sm border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                                    placeholder="Zoom"
+                                                >
+                                                <input
+                                                    :value="stop[1]"
+                                                    @input="updateStopValue(key, stopIndex, 1, parseFloat($event.target.value))"
+                                                    type="number"
+                                                    step="0.1"
+                                                    class="flex-1 px-3 py-2 text-sm border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                                    placeholder="Value"
+                                                >
+                                                <button
+                                                    v-if="value.stops.length > 1"
+                                                    @click="removeStop(key, stopIndex)"
+                                                    class="px-3 py-2 bg-red-500 text-white rounded-lg hover:bg-red-600 text-xs"
+                                                >
+                                                    ×
+                                                </button>
+                                            </div>
+                                            <button
+                                                @click="addStop(key)"
+                                                class="w-full px-3 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 text-xs"
+                                            >
+                                                + Add Stop
+                                            </button>
+                                        </div>
+                                    </div>
+
+                                    <!-- Width Properties -->
+                                    <div v-else-if="isWidthProperty(key)">
+                                        <label class="text-xs font-semibold text-slate-900 block mb-1">{{ formatPropertyName(key) }}</label>
+                                        <p v-if="getPropertyDescription(key)" class="text-xs text-slate-500 mb-2">{{ getPropertyDescription(key) }}</p>
+                                        <input
+                                            v-if="typeof value === 'number'"
+                                            :value="value"
+                                            @input="updateLayerProperty('paint', key, parseFloat($event.target.value))"
+                                            type="number"
+                                            step="0.1"
+                                            min="0"
+                                            class="w-full px-3 py-2 text-sm border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                        >
+                                        <div v-else class="p-2 bg-slate-100 rounded text-xs font-mono text-slate-600 overflow-x-auto">
+                                            {{ JSON.stringify(value, null, 2) }}
+                                        </div>
+                                    </div>
+
+                                    <!-- Blur and other simple number Properties -->
+                                    <div v-else-if="isSimpleNumberProperty(key)">
+                                        <label class="text-xs font-semibold text-slate-900 block mb-1">{{ formatPropertyName(key) }}</label>
+                                        <p v-if="getPropertyDescription(key)" class="text-xs text-slate-500 mb-2">{{ getPropertyDescription(key) }}</p>
+                                        <input
+                                            v-if="typeof value === 'number'"
+                                            :value="value"
+                                            @input="updateLayerProperty('paint', key, parseFloat($event.target.value))"
+                                            type="number"
+                                            step="0.1"
+                                            class="w-full px-3 py-2 text-sm border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                        >
+                                        <div v-else class="p-2 bg-slate-100 rounded text-xs font-mono text-slate-600 overflow-x-auto">
+                                            {{ JSON.stringify(value, null, 2) }}
+                                        </div>
+                                    </div>
+
+                                    <!-- Other Properties -->
+                                    <div v-else>
+                                        <label class="text-xs font-medium text-slate-600 block mb-2">{{ formatPropertyName(key) }}</label>
+                                        <div class="p-2 bg-slate-100 rounded text-xs font-mono text-slate-600 overflow-x-auto">
+                                            {{ JSON.stringify(value, null, 2) }}
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Layout Properties -->
+                        <div v-if="selectedLayer.layout && Object.keys(selectedLayer.layout).length > 0">
+                            <h4 class="text-xs font-semibold text-slate-700 mb-3">Layout Properties</h4>
+                            <div class="space-y-3">
+                                <div v-for="(value, key) in selectedLayer.layout" :key="key">
+                                    <label class="text-xs font-medium text-slate-600 block mb-2">{{ formatPropertyName(key) }}</label>
+                                    <div class="p-2 bg-slate-100 rounded text-xs font-mono text-slate-600 overflow-x-auto">
+                                        {{ JSON.stringify(value, null, 2) }}
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Empty State -->
+                    <div v-else class="flex flex-col items-center justify-center py-12 text-slate-400">
+                        <svg class="w-16 h-16 mb-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1" d="M7 21a4 4 0 01-4-4V5a2 2 0 012-2h4a2 2 0 012 2v12a4 4 0 01-4 4zm0 0h12a2 2 0 002-2v-4a2 2 0 00-2-2h-2.343M11 7.343l1.657-1.657a2 2 0 012.828 0l2.829 2.829a2 2 0 010 2.828l-8.486 8.485M7 17h.01"/>
+                        </svg>
+                        <p class="text-sm">Select a layer to view properties</p>
+                    </div>
+                </div>
+
+                <!-- Style Information -->
+                <div class="p-6">
+                    <h3 class="text-sm font-semibold text-slate-900 mb-4">Style Information</h3>
+                    <div class="space-y-3">
+                        <div class="flex justify-between text-sm">
+                            <span class="text-slate-600">Base Style</span>
+                            <span class="text-slate-900 font-medium">Beachglass</span>
+                        </div>
+                        <div class="flex justify-between text-sm">
+                            <span class="text-slate-600">Version</span>
+                            <span class="text-slate-900 font-medium">{{ currentStyle?.version || 8 }}</span>
+                        </div>
+                        <div class="flex justify-between text-sm">
+                            <span class="text-slate-600">Tile Source</span>
+                            <span class="text-slate-900 font-medium">OpenMapTiles</span>
+                        </div>
+                        <div class="flex justify-between text-sm">
+                            <span class="text-slate-600">Total Layers</span>
+                            <span class="text-slate-900 font-medium">{{ currentStyle?.layers?.length || 0 }}</span>
+                        </div>
+                        <div class="flex justify-between text-sm">
+                            <span class="text-slate-600">Last Modified</span>
+                            <span class="text-slate-900 font-medium">{{ lastModified }}</span>
+                        </div>
+                    </div>
+                </div>
+            </aside>
+        </div>
+
+        <!-- Toast Notification -->
+        <transition
+            enter-active-class="transition ease-out duration-300"
+            enter-from-class="transform translate-y-2 opacity-0"
+            enter-to-class="transform translate-y-0 opacity-100"
+            leave-active-class="transition ease-in duration-200"
+            leave-from-class="transform translate-y-0 opacity-100"
+            leave-to-class="transform translate-y-2 opacity-0"
+        >
+            <div
+                v-if="toast.show"
+                :class="[
+                    'fixed bottom-6 right-6 px-6 py-4 rounded-lg shadow-lg text-white font-medium',
+                    toast.type === 'success' ? 'bg-green-500' : 'bg-red-500'
+                ]"
+            >
+                {{ toast.message }}
+            </div>
+        </transition>
+    </div>
+
+    <script src="script.js"></script>
+</body>
+</html>
